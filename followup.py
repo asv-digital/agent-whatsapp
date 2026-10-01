@@ -48,6 +48,8 @@ from disparo import (
     load_dotenv,
     normalize_phone_e164_br,
     send_with_retry,
+    fill_gaps,
+    render_first_name,
 )
 
 load_dotenv(SCRIPT_DIR / ".env")
@@ -140,6 +142,18 @@ def _enroll_one(conn, phone, name, cadencia_name, start_at=None):
     return inserted
 
 
+def _warn_gaps(cadence_name):
+    """Avisa se os textos da cadência têm lacuna ([TEMA], [PRODUTO]...) ainda sem preencher no .env."""
+    missing = []
+    for _, template in (load_cadencia(cadence_name) or []):
+        for var in fill_gaps(template)[1]:
+            if var not in missing:
+                missing.append(var)
+    if missing:
+        print(f"⚠️ Os textos de '{cadence_name}' usam {', '.join(missing)}. "
+              f"Preencha no .env — enquanto estiver vazio, essas mensagens não são enviadas.")
+
+
 def cmd_enroll(args):
     init_db()
     phone = normalize_phone_e164_br(args.phone)
@@ -152,6 +166,7 @@ def cmd_enroll(args):
         print(f"⚠️ {phone} já está enrolled em '{args.cadencia}'.")
         return 0
     print(f"✅ {phone} enrolled em '{args.cadencia}' — {n} jobs criados.")
+    _warn_gaps(args.cadencia)
     return 0
 
 
@@ -221,7 +236,7 @@ def cmd_fire_once(args):
         jobs = cur.fetchall()
 
     print(f"fire-once: {len(jobs)} jobs prontos pra disparar")
-    fired = skipped = failed = 0
+    fired = skipped = failed = blocked = 0
 
     with open(log_path, "w", encoding="utf-8") as log_fp:
         log_fp.write(f"# followup fire-once {now_iso()} jobs={len(jobs)}\n")
@@ -251,7 +266,14 @@ def cmd_fire_once(args):
                 cur = conn.execute("SELECT name, first_name FROM leads WHERE phone_e164 = ?", (phone,))
                 lead = cur.fetchone()
             first = lead["first_name"] if lead else ""
-            text = copy_template.replace("{{first_name}}", first or "").replace("{{name}}", lead["name"] if lead else "")
+            text = render_first_name(copy_template, first).replace("{{name}}", (lead["name"] if lead else "") or "")
+            text, missing = fill_gaps(text)
+            if missing:
+                # texto pronto com lacuna sem preencher: NÃO envia; o job continua pendente
+                print(f"  ⏸ {phone} {job['cadence_name']} step{job['step']}: falta preencher "
+                      f"{', '.join(missing)} no .env — mensagem NÃO enviada")
+                blocked += 1
+                continue
 
             ok, status, err, _ = send_with_retry(phone, text, None, False, 2, 2, log_fp)
             with connect() as conn:
@@ -273,7 +295,8 @@ def cmd_fire_once(args):
 
             time.sleep(DEFAULT_DELAY_BETWEEN_FIRES)
 
-    print(f"\n✅ {fired} disparados | {skipped} skipped | {failed} falhas")
+    print(f"\n✅ {fired} disparados | {skipped} skipped | {failed} falhas"
+          + (f" | {blocked} aguardando preencher o .env" if blocked else ""))
     return 0
 
 

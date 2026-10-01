@@ -159,7 +159,7 @@ def export_consolidated_dedup(api_groups, csv_groups, args, blacklist):
             })
     print(f"CSV: {output}")
     print(f"Leads únicos: {len(leads)}")
-    return len(leads)
+    return 0
 
 
 def export_consolidated_raw(api_groups, csv_groups, args, blacklist):

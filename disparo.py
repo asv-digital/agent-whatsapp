@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-disparo.py — core do agente whatsapp-zappfy-grupos
+disparo.py — core do agente Agent-Whatsapp
 
 Modos:
   listar         lista grupos da instância (com role do operador) e exporta CSV
@@ -38,9 +38,11 @@ import mimetypes
 import os
 import pathlib
 import random
+import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from datetime import datetime
@@ -62,6 +64,20 @@ DEFAULT_BACKOFF = 2
 HEALTH_CHECK_THRESHOLD = 50
 
 
+def _clean_env_value(value):
+    """Limpa o valor de uma linha do .env: tira aspas, comentário na mesma linha e converte \\n."""
+    value = value.strip()
+    if len(value) >= 2 and value[0] in ('"', "'") and value[-1] == value[0]:
+        value = value[1:-1]
+    else:
+        # "VALOR   # comentário" → "VALOR" (texto com # precisa vir entre aspas)
+        for marker in (" #", "\t#"):
+            idx = value.find(marker)
+            if idx != -1:
+                value = value[:idx].rstrip()
+    return value.replace("\\n", "\n")
+
+
 def load_dotenv(env_path):
     if not env_path.is_file():
         return
@@ -71,7 +87,7 @@ def load_dotenv(env_path):
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, _, value = line.partition("=")
-            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+            os.environ.setdefault(key.strip(), _clean_env_value(value))
 
 
 load_dotenv(SCRIPT_DIR / ".env")
@@ -100,9 +116,11 @@ def now_iso():
 
 def api_request(method, endpoint, data=None, timeout=30):
     require_token()
-    url = f"{API_BASE}{endpoint}?token={TOKEN}"
-    headers = {"Content-Type": "application/json"}
-    body = json.dumps(data).encode("utf-8") if data else None
+    # Token vai no header (padrão da doc da Zappfy) e na URL (compatibilidade).
+    sep = "&" if "?" in endpoint else "?"
+    url = f"{API_BASE}{endpoint}{sep}token={urllib.parse.quote(TOKEN)}"
+    headers = {"Content-Type": "application/json", "token": TOKEN}
+    body = json.dumps(data).encode("utf-8") if data is not None else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -115,6 +133,67 @@ def api_request(method, endpoint, data=None, timeout=30):
         return {"ok": False, "status": 0, "error": f"URLError: {exc.reason}"}
     except Exception as exc:
         return {"ok": False, "status": -1, "error": f"{type(exc).__name__}: {exc}"}
+
+
+# Lacunas dos textos prontos (follow-up e respostas automáticas) → variável do .env que preenche
+MSG_GAPS = {
+    "[SUA EMPRESA]": "MSG_EMPRESA",
+    "[EMPRESA]": "MSG_EMPRESA",
+    "[TEMA]": "MSG_TEMA",
+    "[PRODUTO]": "MSG_PRODUTO",
+    "[BENEFÍCIO ESPECÍFICO]": "MSG_BENEFICIO",
+    "[NOVIDADE]": "MSG_NOVIDADE",
+    "[LINK]": "MSG_LINK",
+}
+
+
+def fill_gaps(text):
+    """Preenche as lacunas ([TEMA], [PRODUTO]...) com as variáveis MSG_* do .env.
+    Retorna (texto, [variáveis que faltam]). Com variável faltando, a mensagem NÃO deve ser enviada."""
+    missing = []
+    for gap, var in MSG_GAPS.items():
+        if gap not in text:
+            continue
+        value = os.environ.get(var, "").strip()
+        if value:
+            text = text.replace(gap, value)
+        elif var not in missing:
+            missing.append(var)
+    return text, missing
+
+
+def render_first_name(text, first_name):
+    """Troca {{first_name}}. Sem nome, remove o placeholder sem deixar "Oi !" nem vírgula solta."""
+    if "{{first_name}}" not in text:
+        return text
+    first = (first_name or "").strip()
+    if first:
+        return text.replace("{{first_name}}", first)
+    text = re.sub(r"\s*\{\{first_name\}\}\s*([!,.?])", r"\1", text)
+    text = text.replace("{{first_name}}", "").strip()
+    text = re.sub(r"^[,\s]+", "", text)
+    return text[:1].upper() + text[1:] if text else text
+
+
+def to_epoch_seconds(value):
+    """Converte timestamp (segundos, milissegundos ou ISO) pra segundos. None se não der."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        try:
+            value = float(value)
+        except ValueError:
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if value > 1e11:  # milissegundos
+        value = value / 1000.0
+    return value
 
 
 def normalize_phone_e164_br(raw):
@@ -171,6 +250,8 @@ def render_template(text, contato):
     name = contato.get("name", "") or ""
     first_name = name.split()[0] if name else ""
     phone = contato.get("phone_e164", "")
+    if not first_name:
+        text = render_first_name(text, "")  # contato sem nome: não deixa "Oi , tudo bem?"
     base = {
         "name": name,
         "first_name": first_name,

@@ -112,8 +112,8 @@ def cmd_split(args):
 
 
 def fetch_messages_for_group(jid):
-    """Tenta endpoint comum da Zappfy pra histórico do grupo. Ajuste se diferente."""
-    r = api_request("GET", f"/group/messages?number={jid}")
+    """Histórico do grupo pela API da Zappfy (POST /message/find)."""
+    r = api_request("POST", "/message/find", {"chatid": jid, "limit": 200})
     if r["ok"]:
         body = r["body"]
         if isinstance(body, dict):
@@ -132,8 +132,10 @@ def count_replies_after(jid, since_iso):
     count = 0
     for m in msgs:
         try:
-            ts = m.get("timestamp") or m.get("Timestamp") or m.get("MessageTimestamp")
+            ts = m.get("messageTimestamp") or m.get("timestamp") or m.get("Timestamp") or m.get("MessageTimestamp")
             ts = float(ts) if ts else 0
+            if ts > 1e11:  # a Zappfy devolve em milissegundos
+                ts = ts / 1000.0
             from_me = m.get("fromMe") or m.get("FromMe")
             if not from_me and ts >= since_ts:
                 count += 1

@@ -56,7 +56,7 @@ PATTERNS = {
         (r"\btenho interesse\b",             1.0),
         (r"\bme interessa\b",                0.9),
         (r"\bme manda\b",                    0.7),
-        (r"\bcomo (faco|funciona|fazer)\b",  0.75),
+        (r"\bcomo (faco|fazer)\b",           0.75),
         (r"\bcomo eu (faco|entro|compro)\b", 0.85),
         (r"\b(eu )?topo\b",                  0.85),
         (r"\bbora\b",                        0.6),
@@ -126,6 +126,15 @@ def classify(text):
         return "ruido", 0.95, {"reason": "vazio"}
 
     norm = _norm(text)
+
+    # Cumprimento puro ("oi, tudo bem?") é saudação, não pergunta
+    if re.fullmatch(
+        r"(oi+|ola|opa|e ai|salve|bom dia|boa tarde|boa noite)[\s,!.]*"
+        r"(tudo (bem|bom|certo|joia)|td bem|como vai|beleza|blz)?[\s?!.]*",
+        norm,
+    ):
+        return "saudacao", 0.9, {"reason": "cumprimento"}
+
     scores = {}
 
     for intent, patterns in PATTERNS.items():

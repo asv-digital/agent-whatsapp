@@ -169,7 +169,7 @@ def render_report(stats, log_path, ticket_value=None, response_rate=0.08, conver
     lines.append("5. Auditar opt-out recebidos no WhatsApp e adicionar à `blacklist.txt`.")
     lines.append("")
 
-    lines.append(f"---\n_Gerado por whatsapp-zappfy-grupos · {datetime.now():%Y-%m-%d %H:%M}_\n")
+    lines.append(f"---\n_Gerado por Agent-Whatsapp · {datetime.now():%Y-%m-%d %H:%M}_\n")
     return "\n".join(lines)
 
 

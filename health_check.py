@@ -103,7 +103,7 @@ def main():
         print("   da instância (passo a passo: COMO-INSTALAR.md, seção 1.1).", file=sys.stderr)
         return 2
 
-    print("=== Health Check — whatsapp-zappfy-grupos ===")
+    print("=== Health Check — Agent-Whatsapp ===")
     print(f"API: {API_BASE}")
 
     avg_ms, fails_in_test = latency_test(10)

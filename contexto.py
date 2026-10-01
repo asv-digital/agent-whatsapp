@@ -35,7 +35,7 @@ from disparo import normalize_phone_e164_br
 
 def http_get(url, timeout=20):
     req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (whatsapp-zappfy-grupos contexto.py)",
+        "User-Agent": "Mozilla/5.0 (Agent-Whatsapp contexto.py)",
         "Accept": "text/html,application/json,text/csv",
     })
     with urllib.request.urlopen(req, timeout=timeout) as resp:

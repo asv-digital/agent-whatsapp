@@ -229,6 +229,10 @@ def upsert_lead(conn, phone_e164, **fields):
             if col in fields:
                 sets.append(f"{col} = ?")
                 vals.append(fields[col])
+        # nome chegou depois (lead criado sem nome): preenche o primeiro nome junto
+        if fields.get("name") and "first_name" not in fields:
+            sets.append("first_name = ?")
+            vals.append(first_name)
         if "custom_fields" in fields:
             sets.append("custom_fields = ?")
             vals.append(_json.dumps(fields["custom_fields"]))

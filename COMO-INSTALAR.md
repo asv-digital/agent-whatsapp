@@ -1,13 +1,12 @@
-# Como instalar — whatsapp-zappfy-grupos
+# Como instalar — Agent-Whatsapp
 
 Passo a passo do zero ao primeiro disparo seguro com relatório executivo.
 
 ## 1. Pré-requisitos
 
 - **API de WhatsApp (Zappfy)** com instância conectada via QR Code e a **API Key** dela em mãos. Ainda não tem? Siga o passo **1.1** abaixo.
-- **Python 3.8+** instalado (`python3 --version`).
-- **Claude Code** instalado e logado: <https://docs.claude.com/claude-code>.
-- Terminal com `unzip` (se recebeu o pacote como zip).
+- **Python instalado** (versão 3.8 ou mais nova). É o programa gratuito que faz o agente funcionar. Pra conferir, abra o Terminal e rode `python3 --version`. Se não tiver: no Windows, instale pela Microsoft Store (procure por "Python"); no Mac, aceite a instalação que o computador oferece ou baixe em <https://www.python.org/downloads/>.
+- **Claude Code** instalado e logado (opcional, mas recomendado): <https://docs.claude.com/claude-code>.
 
 ### 1.1 Contratar a API do WhatsApp (Zappfy) e pegar a API Key
 
@@ -17,7 +16,7 @@ Pra ligar o seu WhatsApp ao Claude você precisa de uma API de WhatsApp. Este ag
 2. No painel, abra **Planos** e escolha pela quantidade de números que vai conectar (1, 3 ou 5). **1 número de WhatsApp = 1 instância.** Pra este agente, 1 número já basta.
 3. Volte em **Dashboard** e clique em **Nova Instância**.
 4. Escaneie o QR Code com o WhatsApp que vai operar: no celular, *Configurações → Dispositivos conectados → Conectar dispositivo*.
-5. Quando o card da instância mostrar o status conectado, copie o campo **API Key** (um código no formato `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`). É esse valor que vai no `ZAPPFY_TOKEN` do passo 3.
+5. Quando o card da instância mostrar o status conectado, copie o campo **API Key** (um código no formato `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`). É esse valor que o assistente de instalação pede no passo 3.
 
 > A Zappfy recomenda usar **WhatsApp Business** em vez do WhatsApp comum — o comum pode desconectar e ficar instável com API.
 
@@ -27,25 +26,50 @@ Documentação da Zappfy: <https://docs.zappfy.io>
 
 ## 2. Descompactar e abrir
 
-```bash
-unzip whatsapp-zappfy-grupos.zip
-cd whatsapp-zappfy-grupos
-```
+Dê dois cliques no `Agent-Whatsapp.zip` pra descompactar. Depois abra o **Terminal** dentro da pasta que apareceu: abra o aplicativo Terminal, digite `cd ` (com um espaço depois), arraste a pasta pra dentro da janela e aperte Enter.
 
-## 3. Configurar credenciais
+## 3. Instalar com o assistente (recomendado)
 
 ```bash
-cp .env.example .env
+python3 instalar.py
 ```
 
-Edite `.env`:
+Se o comando `python3` não existir no seu computador, use `python instalar.py`.
+
+O assistente faz 4 perguntas e cuida do resto:
+
+1. **API Key da Zappfy** — o código do campo "API Key" do cartão do seu número (passo 1.1).
+2. **Seu número de WhatsApp** — com DDD. É pra ele que o agente manda as mensagens de teste.
+3. **Link da sua agenda** (opcional) — Calendly ou parecido. O agente envia quando o cliente quer marcar horário.
+4. **Nome da sua empresa** (opcional) — entra na resposta automática de saudação.
+
+Com as respostas, ele cria o arquivo de configuração (`.env`), testa a conexão (passo 4), puxa a lista dos seus grupos (passo 5) e instala o agente no Claude Code (passo 8). Se tudo terminar com "Pronto!", pode pular direto pro passo 6.
+
+### 3.1 Preencha as lacunas dos textos prontos
+
+Os textos prontos de follow-up e de saudação têm lacunas como `[TEMA]` e `[PRODUTO]`. Abra o arquivo `.env` e preencha as linhas que começam com `MSG_`:
+
+| Linha do `.env` | Lacuna que ela preenche | Onde é usada |
+|---|---|---|
+| `MSG_EMPRESA` | `[SUA EMPRESA]` | resposta automática de saudação |
+| `MSG_TEMA` | `[TEMA]` | cadências `followup_padrao` e `pos_proposta` |
+| `MSG_BENEFICIO` | `[BENEFÍCIO ESPECÍFICO]` | cadência `followup_padrao` |
+| `MSG_PRODUTO` | `[PRODUTO]` | cadência `recuperacao_carrinho` |
+| `MSG_NOVIDADE` e `MSG_LINK` | `[NOVIDADE]` e `[LINK]` | cadência `reativacao` |
+
+Enquanto uma linha estiver vazia, o agente **não envia** a mensagem que depende dela — assim nunca chega um `[TEMA]` no WhatsApp do seu cliente.
+
+### 3.2 Configuração manual (se preferir não usar o assistente)
+
+Copie o arquivo `.env.example` com o nome `.env` e preencha:
+
 ```
-# ZAPPFY_TOKEN = campo "API Key" do card da instância (painel Zappfy → Dashboard)
 ZAPPFY_TOKEN=cole-aqui-a-api-key-da-sua-instancia
-TEST_NUMBER=5511999998888    # seu WhatsApp pessoal com DDI
+TEST_NUMBER=5511999998888
 API_BASE=https://api.zappfy.io
-# (opcional) OPERATOR_NUMBER=5511999998888  # default: igual ao TEST_NUMBER
 ```
+
+Comentário vai sempre em linha própria, começando com `#`.
 
 > ⚠️ NUNCA commite o `.env`. Já está no `.gitignore`.
 
@@ -113,16 +137,18 @@ python3 disparo.py teste --text-file copy_teste.txt
 
 ## 8. Instalar agente Claude Code
 
+O assistente do passo 3 já faz isso. Pra fazer na mão:
+
 ### Opção A — só no projeto atual (recomendado)
 ```bash
 mkdir -p .claude/agents
-cp whatsapp-zappfy-grupos.md .claude/agents/
+cp agent-whatsapp.md .claude/agents/
 ```
 
 ### Opção B — global
 ```bash
 mkdir -p ~/.claude/agents
-cp whatsapp-zappfy-grupos.md ~/.claude/agents/
+cp agent-whatsapp.md ~/.claude/agents/
 ```
 
 ### Reiniciar Claude Code
@@ -132,7 +158,7 @@ Saia com `/exit`, abra de novo na pasta. Confirme:
 /agents
 ```
 
-Deve aparecer `whatsapp-zappfy-grupos`.
+Deve aparecer `agent-whatsapp`.
 
 ## 9. Primeiro disparo via Claude Code
 
@@ -249,14 +275,16 @@ O `.md` traz: resumo executivo, falhas por código HTTP com diagnóstico, qualid
 
 | Sintoma | Causa | Solução |
 |---|---|---|
-| `ZAPPFY_TOKEN ausente` | `.env` vazio | Cria `.env` a partir do `.env.example`. Sem API Key ainda? Passo 1.1 |
+| `ZAPPFY_TOKEN ausente` | `.env` vazio | Rode `python3 instalar.py`. Sem API Key ainda? Passo 1.1 |
 | `ERRO HTTP 401` | Token inválido | Copia de novo a **API Key** no painel Zappfy (Dashboard → card da instância) |
 | `ERRO HTTP 429` | Rate limit | Aumenta `--delay` (60→90s) |
 | `Bloqueado: rode teste` | Pulou passo 3 | Roda `teste` antes do `broadcast --confirmed-test` |
 | `CSV não encontrado` | Faltou `grupos.csv` | `python3 disparo.py listar --csv-out grupos.csv` |
 | Health-check 🔴 latência | API lenta | Aguarda 5min e tenta — se persistir, pause |
 | Health-check 🔴 erro 24h | Instância banida | Pause 24-72h, reconecta QR no Zappfy |
-| A/B sem dados de resposta | Endpoint `/group/messages` não retornou | Aguarda mais tempo; se Zappfy mudou endpoint, ajuste em `ab_test.py` `fetch_messages_for_group()` |
+| A/B sem dados de resposta | Ainda não chegou resposta nos grupos | Aguarda mais tempo e rode `apurar` de novo |
+| Follow-up mostra `⏸ falta preencher MSG_...` | Texto pronto com lacuna sem preencher | Preencha a linha `MSG_` indicada no `.env` (passo 3.1) e rode de novo |
+| `inbox.py pull` falha em `/chat/find` | Token inválido ou instância desconectada | `python3 health_check.py` e confira o painel da Zappfy |
 | Watcher não dispara | Esqueceu de rodar `agenda-watch` | `python3 disparo.py agenda-watch &` |
 
 ## Suporte

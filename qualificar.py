@@ -49,6 +49,7 @@ from disparo import (
     SCRIPT_DIR,
     load_dotenv,
     normalize_phone_e164_br,
+    render_first_name,
     send_with_retry,
 )
 
@@ -73,7 +74,7 @@ QUALIFY_DELAY_BETWEEN_Q = int(os.environ.get("QUALIFY_DELAY_BETWEEN_Q", "60"))
 
 def render(text, name):
     first = (name or "").split()[0] if name else ""
-    return text.replace("{{first_name}}", first).replace("{{name}}", name or "")
+    return render_first_name(text, first).replace("{{name}}", name or "")
 
 
 def cmd_start(args):
@@ -95,7 +96,9 @@ def cmd_start(args):
         text = render(args.intro or "Oi {{first_name}}! 3 perguntas rápidas:", name)
         text += "\n\n"
         for i, q in enumerate(DEFAULT_QUESTIONS, 1):
-            text += f"{i}) {render(q, name).replace('Oi {{first_name}}! ', '')}\n"
+            # a saudação já foi na intro: tira o "Oi {{first_name}}! " do começo da pergunta
+            pergunta = render(q.replace("Oi {{first_name}}! ", ""), name)
+            text += f"{i}) {pergunta[:1].upper() + pergunta[1:]}\n"
         with open(log_path, "w", encoding="utf-8") as fp:
             ok, status, err, _ = send_with_retry(phone, text, None, False, 2, 2, fp)
         with connect() as conn:

@@ -3,7 +3,7 @@
 inbox.py — leitura de mensagens recebidas + classificação + auto-ação
 
 Modos:
-  pull       puxa mensagens novas via /chat/messages (ou /messages/list) e popula inbox
+  pull       puxa mensagens novas via /chat/find + /message/find e popula inbox
   watch      loop infinito: pull a cada N segundos
   webhook    sobe servidor HTTP minimal pra receber webhook da Zappfy
   classify   re-classifica intents do inbox (útil após melhorar regex)
@@ -36,6 +36,7 @@ import pathlib
 import sys
 import time
 from datetime import datetime
+from urllib.parse import parse_qs, urlparse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from db import (
@@ -55,6 +56,9 @@ from disparo import (
     load_dotenv,
     normalize_phone_e164_br,
     send_with_retry,
+    fill_gaps,
+    render_first_name,
+    to_epoch_seconds,
 )
 from intent import classify
 
@@ -63,6 +67,11 @@ LOGS_DIR = SCRIPT_DIR / "logs"
 
 load_dotenv(SCRIPT_DIR / ".env")
 CALENDLY_URL = os.environ.get("CALENDLY_URL", "").strip()
+if "seu-usuario" in CALENDLY_URL:
+    CALENDLY_URL = ""  # link de exemplo do .env.example não foi trocado: não envia pra lead
+MAX_CHATS_PULL = 500         # conversas mais recentes olhadas a cada pull
+MSGS_PER_CHAT = 20           # mensagens lidas por conversa
+IGNORED_TYPES = ("ReactionMessage", "ProtocolMessage")
 WEBHOOK_TOKEN = os.environ.get("WEBHOOK_TOKEN", "").strip()
 AUTO_REPLY_OPT_OUT = os.environ.get("AUTO_REPLY_OPT_OUT", "ok, parei. Você não vai mais receber mensagens nossas.")
 AUTO_REPLY_AGENDAMENTO_TEMPLATE = os.environ.get(
@@ -71,7 +80,7 @@ AUTO_REPLY_AGENDAMENTO_TEMPLATE = os.environ.get(
 )
 AUTO_REPLY_SAUDACAO = os.environ.get(
     "AUTO_REPLY_SAUDACAO",
-    "oi! tudo bem? Sou da [EMPRESA]. Como posso te ajudar?"
+    "oi! tudo bem? Sou da [SUA EMPRESA]. Como posso te ajudar?"
 )
 
 
@@ -89,66 +98,101 @@ def append_blacklist_file(phone_e164, reason=""):
 
 
 def fetch_inbox_from_api(since_iso=None, limit=100):
-    """Tenta /chat/messages, com fallback para /messages/list. Cada Zappfy varia.
-    Operador pode ajustar ENDPOINT_INBOX no .env se necessário."""
-    endpoint = os.environ.get("ENDPOINT_INBOX", "/chat/messages")
-    params = []
-    if since_iso:
-        params.append(f"after={since_iso}")
-    if limit:
-        params.append(f"limit={limit}")
-    suffix = ("&" + "&".join(params)) if params else ""
-    full = endpoint + suffix
-    r = api_request("GET", full)
-    if not r["ok"]:
-        # Fallback
-        endpoint = "/messages/list"
-        full = endpoint + suffix
-        r = api_request("GET", full)
-        if not r["ok"]:
-            return None, f"falha em ambos endpoints: {r.get('error', '')}"
+    """Puxa as mensagens recebidas em conversas 1:1 pela API da Zappfy.
 
+    1) POST /chat/find    → conversas, da mais recente pra mais antiga
+    2) POST /message/find → mensagens de cada conversa que teve movimento
+    Retorna (lista de mensagens, erro)."""
+    since_ts = to_epoch_seconds(since_iso) if since_iso else None
+
+    r = api_request("POST", "/chat/find", {"sort": "-wa_lastMsgTimestamp", "limit": MAX_CHATS_PULL})
+    if not r["ok"]:
+        return None, f"falha em /chat/find: status={r.get('status')} {r.get('error', '')}"
     body = r["body"]
-    if isinstance(body, dict):
-        return body.get("messages", body.get("data", [])), None
-    if isinstance(body, list):
-        return body, None
-    return [], None
+    chats = body.get("chats", []) if isinstance(body, dict) else (body or [])
+
+    out = []
+    for chat in chats:
+        if limit and len(out) >= limit:
+            break
+        if not isinstance(chat, dict) or chat.get("wa_isGroup"):
+            continue
+        chatid = str(chat.get("wa_chatid") or "")
+        if not chatid or chatid.endswith("@g.us"):
+            continue
+        last = to_epoch_seconds(chat.get("wa_lastMsgTimestamp"))
+        if since_ts and last is not None and last < since_ts:
+            continue
+
+        m = api_request("POST", "/message/find", {"chatid": chatid, "limit": MSGS_PER_CHAT})
+        if not m["ok"]:
+            continue
+        mbody = m["body"]
+        msgs = mbody.get("messages", []) if isinstance(mbody, dict) else (mbody or [])
+        for msg in msgs:
+            if not isinstance(msg, dict) or msg.get("fromMe"):
+                continue
+            ts = to_epoch_seconds(msg.get("messageTimestamp") or msg.get("timestamp"))
+            if since_ts and ts is not None and ts < since_ts:
+                continue
+            msg.setdefault("chatid", chatid)
+            out.append(msg)
+
+    return (out[:limit] if limit else out), None
 
 
 def normalize_message(msg):
     """Normaliza mensagem da Zappfy pra dict { id, phone, text, received_at, media_type, raw }.
-    Aceita variações de schema."""
-    msg_id = msg.get("id") or msg.get("ID") or msg.get("messageId") or msg.get("message_id")
-    raw_phone = (
-        msg.get("from") or msg.get("From") or
-        msg.get("number") or msg.get("Number") or
-        msg.get("sender") or msg.get("phone") or ""
-    )
-    if "@" in str(raw_phone):
-        raw_phone = str(raw_phone).split("@", 1)[0]
-    phone = normalize_phone_e164_br(raw_phone)
+    Aceita a mensagem solta ou dentro do envelope do webhook/SSE ({"message": {...}} / {"data": {...}})."""
+    if not isinstance(msg, dict):
+        return None
+    for key in ("message", "data"):
+        inner = msg.get(key)
+        if isinstance(inner, dict):
+            msg = inner
+            break
+
+    if msg.get("fromMe") or msg.get("FromMe") or msg.get("from_me") or msg.get("wasSentByApi"):
+        return None  # ignora mensagens enviadas pela própria instância
+    if msg.get("isGroup") or msg.get("wa_isGroup"):
+        return None  # inbox é só conversa 1:1
+
+    media_type = msg.get("messageType") or msg.get("type") or msg.get("Type") or "text"
+    if media_type in IGNORED_TYPES:
+        return None
+
+    phone = None
+    for key in ("chatid", "from", "From", "sender", "number", "Number", "phone"):
+        value = str(msg.get(key) or "")
+        if not value:
+            continue
+        if value.endswith("@g.us"):
+            return None  # mensagem de grupo
+        phone = normalize_phone_e164_br(value.split("@", 1)[0])
+        if phone:
+            break
     if not phone:
         return None
 
+    content = msg.get("content") if isinstance(msg.get("content"), dict) else {}
     text = (
-        msg.get("body") or msg.get("Body") or
         msg.get("text") or msg.get("Text") or
-        msg.get("message") or msg.get("caption") or ""
+        msg.get("body") or msg.get("Body") or
+        content.get("text") or msg.get("caption") or ""
     )
+    if not text and isinstance(msg.get("message"), str):
+        text = msg["message"]
 
-    received = msg.get("timestamp") or msg.get("Timestamp") or msg.get("MessageTimestamp")
-    if isinstance(received, (int, float)):
-        received_iso = datetime.fromtimestamp(received).replace(microsecond=0).isoformat()
-    elif isinstance(received, str):
-        received_iso = received
+    received = (msg.get("messageTimestamp") or msg.get("timestamp") or
+                msg.get("Timestamp") or msg.get("MessageTimestamp"))
+    received_ts = to_epoch_seconds(received)
+    if received_ts is not None:
+        received_iso = datetime.fromtimestamp(received_ts).replace(microsecond=0).isoformat()
     else:
         received_iso = now_iso()
 
-    media_type = msg.get("type") or msg.get("Type") or "text"
-    from_me = msg.get("fromMe") or msg.get("FromMe") or msg.get("from_me") or False
-    if from_me:
-        return None  # ignora mensagens enviadas pela própria instância
+    msg_id = (msg.get("messageid") or msg.get("id") or msg.get("ID") or
+              msg.get("messageId") or msg.get("message_id"))
 
     return {
         "id": str(msg_id) if msg_id else f"{phone}_{received_iso}",
@@ -171,7 +215,7 @@ def cmd_pull(args):
     msgs, err = fetch_inbox_from_api(since_iso=since, limit=args.limit)
     if msgs is None:
         print(f"❌ {err}", file=sys.stderr)
-        print("Configure ENDPOINT_INBOX no .env ou use o modo webhook.", file=sys.stderr)
+        print("Confira o ZAPPFY_TOKEN no .env e se a instância está conectada (python3 health_check.py).", file=sys.stderr)
         return 1
 
     inserted = 0
@@ -273,7 +317,7 @@ def cmd_triage(args):
 
             elif intent == "agendamento":
                 if CALENDLY_URL and not args.no_reply:
-                    reply = AUTO_REPLY_AGENDAMENTO_TEMPLATE.format(calendly=CALENDLY_URL)
+                    reply = AUTO_REPLY_AGENDAMENTO_TEMPLATE.replace("{calendly}", CALENDLY_URL)
                 conn.execute(
                     "UPDATE conversations SET state = 'aguardando_reuniao', last_state_change = ? WHERE phone_e164 = ?",
                     (now_iso(), phone),
@@ -305,11 +349,15 @@ def cmd_triage(args):
             elif intent == "saudacao":
                 if not args.no_reply:
                     fname = _render_first_name(conn, phone)
-                    msg_reply = AUTO_REPLY_SAUDACAO
-                    if fname and "{{first_name}}" in msg_reply:
-                        msg_reply = msg_reply.replace("{{first_name}}", fname)
-                    reply = msg_reply
-                action = "saudacao_respondida"
+                    msg_reply, missing = fill_gaps(render_first_name(AUTO_REPLY_SAUDACAO, fname))
+                    if missing:
+                        # texto pronto com lacuna sem preencher: NÃO responde
+                        action = f"saudacao_sem_resposta (falta {', '.join(missing)} no .env)"
+                    else:
+                        reply = msg_reply
+                        action = "saudacao_respondida"
+                else:
+                    action = "saudacao"
 
             elif intent == "pergunta":
                 print(f"❓ PERGUNTA: {phone} — \"{msg['text'][:100]}\"")
@@ -404,11 +452,14 @@ class _WebhookHandler(BaseHTTPRequestHandler):
         return
 
     def do_POST(self):
-        if self.path != "/webhook/zappfy":
+        parsed = urlparse(self.path)
+        if parsed.path != "/webhook/zappfy":
             self.send_response(404); self.end_headers(); return
 
         if WEBHOOK_TOKEN:
-            received = self.headers.get("X-Zappfy-Token", "")
+            # token pode vir no header X-Zappfy-Token ou na própria URL (?token=...)
+            received = (self.headers.get("X-Zappfy-Token", "")
+                        or parse_qs(parsed.query).get("token", [""])[0])
             if received != WEBHOOK_TOKEN:
                 self.send_response(401); self.end_headers(); return
 
@@ -425,7 +476,10 @@ class _WebhookHandler(BaseHTTPRequestHandler):
         inserted = 0
         with connect() as conn:
             for raw in msgs:
-                norm = normalize_message(raw)
+                try:
+                    norm = normalize_message(raw)
+                except Exception:
+                    norm = None  # mensagem em formato inesperado não derruba o servidor
                 if not norm:
                     continue
                 intent, score, _ = classify(norm["text"])
@@ -446,8 +500,8 @@ def cmd_webhook(args):
     server = HTTPServer((args.host, args.port), _WebhookHandler)
     print(f"Webhook ouvindo em http://{args.host}:{args.port}/webhook/zappfy")
     if WEBHOOK_TOKEN:
-        print(f"Header X-Zappfy-Token obrigatório (configurado em .env)")
-    print("Configure no painel Zappfy: events=messages.received → URL acima.")
+        print("Token obrigatório: use a URL terminando em ?token=<WEBHOOK_TOKEN do .env>")
+    print('Configure o webhook na Zappfy com events=["messages"] e excludeMessages=["wasSentByApi"] → URL acima.')
     print("Ctrl+C pra parar.")
     try:
         server.serve_forever()

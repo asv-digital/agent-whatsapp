@@ -1,4 +1,4 @@
-# whatsapp-zappfy-grupos
+# Agent-Whatsapp
 
 **CRM operacional via WhatsApp.** Não é disparador. É o canal comercial inteiro: dispara, recebe, classifica intenção, qualifica BANT, dispara follow-up multi-toque, gerencia pipeline 7 estágios, calcula forecast ponderado, audita abandonados, enriquece com contexto externo, gera relatório executivo. Tudo persistido em SQLite local — auditável 6 meses depois.
 
@@ -112,12 +112,24 @@ Passo a passo completo em `COMO-INSTALAR.md` (seção 1.1).
 
 ## Instalação rápida
 
-```bash
-unzip whatsapp-zappfy-grupos.zip && cd whatsapp-zappfy-grupos
+Descompacte o `Agent-Whatsapp.zip`, abra o Terminal dentro da pasta e rode o assistente:
 
-# 1. Configurar
+```bash
+python3 instalar.py
+```
+
+Ele faz 4 perguntas (API Key da Zappfy, seu número, link da agenda e nome da empresa), cria o arquivo de configuração (`.env`), testa a conexão, puxa a lista dos seus grupos e instala o agente no Claude Code. Funciona igual no Mac, Windows e Linux. Se o comando `python3` não existir no seu computador, use `python instalar.py`.
+
+Depois, feche o Claude Code e abra de novo dentro da pasta.
+
+**Antes de usar o follow-up automático:** os textos prontos têm lacunas (`[TEMA]`, `[PRODUTO]`...). Preencha as linhas `MSG_` do `.env`. Enquanto estiverem vazias, o agente não envia as mensagens que dependem delas.
+
+<details>
+<summary>Instalação manual (sem o assistente)</summary>
+
+```bash
+# 1. Configurar: copie .env.example com o nome .env e preencha ZAPPFY_TOKEN e TEST_NUMBER
 cp .env.example .env
-# editar .env: ZAPPFY_TOKEN, TEST_NUMBER, CALENDLY_URL, DEFAULT_TICKET
 
 # 2. Health-check
 python3 health_check.py
@@ -125,13 +137,12 @@ python3 health_check.py
 # 3. Listar grupos da instância
 python3 disparo.py listar --csv-out grupos.csv
 
-# 4. Inicializar SQLite (auto na primeira execução, mas pode forçar)
-python3 -c "from db import init_db; init_db(); print('DB OK')"
-
-# 5. Instalar agente Claude Code
-mkdir -p .claude/agents && cp whatsapp-zappfy-grupos.md .claude/agents/
+# 4. Instalar agente Claude Code
+mkdir -p .claude/agents && cp agent-whatsapp.md .claude/agents/
 # /exit + reabra Claude Code
 ```
+
+</details>
 
 ## Uso via Claude Code (linguagem natural)
 
@@ -226,8 +237,9 @@ Sem ML, sem dependência externa — regex + heurística. Self-test: `python3 in
 ## Estrutura de arquivos
 
 ```
-whatsapp-zappfy-grupos/
-├── whatsapp-zappfy-grupos.md   # agente Claude Code (21 capacidades)
+Agent-Whatsapp/
+├── agent-whatsapp.md            # agente Claude Code (21 capacidades)
+├── instalar.py                  # assistente de instalação (cria o .env, testa e instala o agente)
 ├── disparo.py                   # core: listar/preview/teste/broadcast/x1/retry/agendar
 ├── extrair_leads.py             # exporta + importa + dedup + E.164 + SHA-256
 ├── segmentar_leads.py           # filtro por DDD/grupos/admin/blacklist/nome
@@ -252,7 +264,7 @@ whatsapp-zappfy-grupos/
 
 ## Comparação com soluções de mercado
 
-| Recurso | Disparador caseiro | RD Station / HubSpot | **whatsapp-zappfy-grupos** |
+| Recurso | Disparador caseiro | RD Station / HubSpot | **Agent-Whatsapp** |
 |---|:-:|:-:|:-:|
 | Disparo grupo + x1 | ✅ | ⚠️ pago | ✅ |
 | Personalização placeholder | ❌ | ✅ | ✅ |
