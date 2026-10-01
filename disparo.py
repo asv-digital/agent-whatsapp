@@ -86,7 +86,9 @@ def require_token():
     if not TOKEN:
         print(
             "ERRO: ZAPPFY_TOKEN ausente. Crie .env com:\n"
-            "  ZAPPFY_TOKEN=<uuid>\n  TEST_NUMBER=<5511...>\n",
+            "  ZAPPFY_TOKEN=<uuid>\n  TEST_NUMBER=<5511...>\n"
+            "Ainda não tem a API do WhatsApp? Contrate em https://zappfy.io e copie a\n"
+            "API Key da instância (passo a passo: COMO-INSTALAR.md, seção 1.1).\n",
             file=sys.stderr,
         )
         sys.exit(2)

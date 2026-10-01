@@ -99,6 +99,8 @@ def last_broadcast():
 def main():
     if not TOKEN:
         print("🔴 ZAPPFY_TOKEN ausente no .env", file=sys.stderr)
+        print("   Ainda não tem a API do WhatsApp? Contrate em https://zappfy.io e copie a API Key", file=sys.stderr)
+        print("   da instância (passo a passo: COMO-INSTALAR.md, seção 1.1).", file=sys.stderr)
         return 2
 
     print("=== Health Check — whatsapp-zappfy-grupos ===")

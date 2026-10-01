@@ -95,10 +95,20 @@ GANHO REALIZADO     R$ 25.000  (10 fechamentos)
 
 ## Pré-requisitos
 
-- **Conta Zappfy** com instância conectada (token UUID).
+- **API de WhatsApp — [Zappfy](https://zappfy.io)** com instância conectada e a **API Key** dela. É a API que a Bravy usa e recomenda; como contratar está logo abaixo.
 - **Python 3.8+** (zero dependências externas — só stdlib).
 - **Claude Code** logado (recomendado, mas opcional — todos comandos rodam via CLI puro).
 - (Opcional) Conta **Calendly** ou Cal.com pra agendamento automático.
+
+### Ainda não tem a API do WhatsApp?
+
+Pra ligar o WhatsApp ao Claude você precisa de uma API de WhatsApp. Este agente roda em cima da **[Zappfy](https://zappfy.io)**:
+
+1. Cadastre-se em <https://zappfy.io> e escolha o plano pela quantidade de números (1 número = 1 instância; 1 já basta).
+2. No painel, **Dashboard → Nova Instância** e escaneie o QR Code com o seu WhatsApp.
+3. Copie a **API Key** do card da instância e cole em `ZAPPFY_TOKEN` no `.env`.
+
+Passo a passo completo em `COMO-INSTALAR.md` (seção 1.1).
 
 ## Instalação rápida
 

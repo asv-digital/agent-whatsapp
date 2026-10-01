@@ -4,10 +4,26 @@ Passo a passo do zero ao primeiro disparo seguro com relatório executivo.
 
 ## 1. Pré-requisitos
 
-- Conta Zappfy ativa com **instância criada e conectada via QR Code**. Pegue o **token (UUID)** no painel Zappfy.
+- **API de WhatsApp (Zappfy)** com instância conectada via QR Code e a **API Key** dela em mãos. Ainda não tem? Siga o passo **1.1** abaixo.
 - **Python 3.8+** instalado (`python3 --version`).
 - **Claude Code** instalado e logado: <https://docs.claude.com/claude-code>.
 - Terminal com `unzip` (se recebeu o pacote como zip).
+
+### 1.1 Contratar a API do WhatsApp (Zappfy) e pegar a API Key
+
+Pra ligar o seu WhatsApp ao Claude você precisa de uma API de WhatsApp. Este agente foi construído em cima da **[Zappfy](https://zappfy.io)** — é a API que a Bravy usa e recomenda. Se já tem instância conectada, pule pro passo 2.
+
+1. Acesse <https://zappfy.io> e clique em **Cadastre-se** (ou direto em <https://dash.zappfy.io/signup>).
+2. No painel, abra **Planos** e escolha pela quantidade de números que vai conectar (1, 3 ou 5). **1 número de WhatsApp = 1 instância.** Pra este agente, 1 número já basta.
+3. Volte em **Dashboard** e clique em **Nova Instância**.
+4. Escaneie o QR Code com o WhatsApp que vai operar: no celular, *Configurações → Dispositivos conectados → Conectar dispositivo*.
+5. Quando o card da instância mostrar o status conectado, copie o campo **API Key** (um código no formato `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`). É esse valor que vai no `ZAPPFY_TOKEN` do passo 3.
+
+> A Zappfy recomenda usar **WhatsApp Business** em vez do WhatsApp comum — o comum pode desconectar e ficar instável com API.
+
+> A API Key dá acesso total ao seu WhatsApp. Não cole em chat, print ou repositório — só no `.env`.
+
+Documentação da Zappfy: <https://docs.zappfy.io>
 
 ## 2. Descompactar e abrir
 
@@ -24,7 +40,8 @@ cp .env.example .env
 
 Edite `.env`:
 ```
-ZAPPFY_TOKEN=cole-aqui-o-uuid-da-sua-instancia
+# ZAPPFY_TOKEN = campo "API Key" do card da instância (painel Zappfy → Dashboard)
+ZAPPFY_TOKEN=cole-aqui-a-api-key-da-sua-instancia
 TEST_NUMBER=5511999998888    # seu WhatsApp pessoal com DDI
 API_BASE=https://api.zappfy.io
 # (opcional) OPERATOR_NUMBER=5511999998888  # default: igual ao TEST_NUMBER
@@ -232,8 +249,8 @@ O `.md` traz: resumo executivo, falhas por código HTTP com diagnóstico, qualid
 
 | Sintoma | Causa | Solução |
 |---|---|---|
-| `ZAPPFY_TOKEN ausente` | `.env` vazio | Cria `.env` a partir do `.env.example` |
-| `ERRO HTTP 401` | Token inválido | Atualiza no painel Zappfy |
+| `ZAPPFY_TOKEN ausente` | `.env` vazio | Cria `.env` a partir do `.env.example`. Sem API Key ainda? Passo 1.1 |
+| `ERRO HTTP 401` | Token inválido | Copia de novo a **API Key** no painel Zappfy (Dashboard → card da instância) |
 | `ERRO HTTP 429` | Rate limit | Aumenta `--delay` (60→90s) |
 | `Bloqueado: rode teste` | Pulou passo 3 | Roda `teste` antes do `broadcast --confirmed-test` |
 | `CSV não encontrado` | Faltou `grupos.csv` | `python3 disparo.py listar --csv-out grupos.csv` |
@@ -244,4 +261,4 @@ O `.md` traz: resumo executivo, falhas por código HTTP com diagnóstico, qualid
 
 ## Suporte
 
-- Email: produtos@asv.digital
+- WhatsApp: [+55 21 97532-8361](https://wa.me/5521975328361)
