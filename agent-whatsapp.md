@@ -50,7 +50,7 @@ Agent-Whatsapp/
 ├── data.db                      # SQLite (auto-criado, 7 tabelas)
 ├── blacklist.txt                # opt-out persistente cross-canal
 ├── grupos.csv.example, contatos.csv.example, .env.example, .gitignore
-├── README.md, COMO-INSTALAR.md, PLAYBOOK-CAMPANHAS.md
+├── README.md, REFERENCIA.md, COMO-INSTALAR.md, PLAYBOOK-CAMPANHAS.md
 ├── logs/, scheduled/, campaigns/, cadencias/   # auto-criados
 ```
 

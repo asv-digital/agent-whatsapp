@@ -1,289 +1,113 @@
 # Agent-Whatsapp
 
-**CRM operacional via WhatsApp.** Não é disparador. É o canal comercial inteiro: dispara, recebe, classifica intenção, qualifica BANT, dispara follow-up multi-toque, gerencia pipeline 7 estágios, calcula forecast ponderado, audita abandonados, enriquece com contexto externo, gera relatório executivo. Tudo persistido em SQLite local — auditável 6 meses depois.
-
-> Produto **Bravy / ASV Digital** — uso comercial liberado pra clientes ASV.
+> ⚠️ **IMPORTANTE: Leia esta página inteira, é essencial para que você consiga extrair 100% do agent.**
 
-## Para quem é
+## CRM operacional via WhatsApp
 
-Negócio que vende mid/high ticket via WhatsApp e hoje:
+**21 capacidades em 4 camadas** — não é disparador, é canal comercial inteiro.
 
-- Não vê quem respondeu o quê (perde lead quente porque ninguém viu)
-- Esquece de fazer follow-up no D+3 e D+7 (lead esfria)
-- Dispara pra quem já pediu opt-out (multa LGPD na esquina)
-- Não consegue dizer pro sócio quanto vai faturar mês que vem só com WhatsApp
+### O que você precisa ter
 
-Custo de ferramentas equivalentes (HubSpot + ManyChat + Calendly + cadência): R$ 800-2.500/mês. Este pacote: comprou uma vez, roda no seu Mac/VPS.
+São três coisas. As duas primeiras são obrigatórias:
 
-## 21 capacidades em 4 camadas
+1. **Uma API de WhatsApp.** É o serviço que liga o seu número de WhatsApp ao agente. Logo abaixo explicamos qual usar e como contratar.
 
-### Camada 1 — DISPARO
+2. **Python instalado no computador.** Python é um programa gratuito, e é ele que faz o agente funcionar. Você não precisa saber usar, só precisa ter instalado. Muitos computadores já têm. Para conferir:
+   - Abra o **Terminal** (o aplicativo de comandos que já vem no computador).
+   - Digite `python3 --version` e aperte Enter.
+   - Se aparecer algo como `Python 3.12`, está pronto. Qualquer número a partir de 3.8 serve.
+   - Se não aparecer, instale de graça: no Windows, procure por "Python" na Microsoft Store e clique em Instalar; no Mac, aceite a instalação que o próprio computador oferece ou baixe em [python.org/downloads](https://www.python.org/downloads/).
 
-| # | Capacidade | Comando |
-|---|---|---|
-| 1 | Listar grupos com role admin/membro | `disparo.py listar` |
-| 2 | Extrair leads (E.164 + dedup + hash SHA-256) | `extrair_leads.py --dedup` |
-| 3 | Segmentar leads (DDD/grupos/admin/blacklist) | `segmentar_leads.py` |
-| 4 | Broadcast em GRUPOS com mention + jitter + retry | `disparo.py broadcast` |
-| 5 | X1 (1:1) personalizado com `{{placeholders}}` | `disparo.py x1` |
-| 6 | Agendamento (broadcast OU x1) | `disparo.py agendar` |
-| 7 | A/B test com z-test 95% | `ab_test.py split + apurar` |
+3. **Claude Code (opcional).** É o aplicativo do Claude que roda no seu computador. Com ele você comanda o agente escrevendo em português, em vez de digitar comandos.
 
-### Camada 2 — INBOX (NOVA)
+### Antes de instalar: você precisa de uma API de WhatsApp
 
-| # | Capacidade | Comando |
-|---|---|---|
-| 8 | Pull/watch de mensagens recebidas | `inbox.py pull` / `watch` |
-| 9 | Webhook HTTP pra Zappfy (tempo real) | `inbox.py webhook --port 8765` |
-| 10 | Classificador 8 intents (sem ML, regex+heurística) | `intent.py` (auto) |
-| 11 | Auto-triage: opt_out→blacklist, agendamento→Calendly, interessado→SQL | `inbox.py triage` |
+Para o agente ler e enviar mensagens pelo seu WhatsApp, é obrigatório ter uma **API de WhatsApp**. É ela que faz a ponte entre o seu número e o agente — sem API, não tem como conectar.
 
-### Camada 3 — CRM (NOVA)
+Por isso recomendamos a que nós usamos: a **[Zappfy](https://zappfy.io)**. O agente já vem pronto para ela.
 
-| # | Capacidade | Comando |
-|---|---|---|
-| 12 | Banco SQLite local (7 tabelas) | `db.py` (auto) |
-| 13 | Qualificação BANT/SPIN comprimida em 3 perguntas | `qualificar.py start + parse` |
-| 14 | Cadência multi-toque D+0..D+30 (4 built-in + custom) | `followup.py enroll + fire-once` |
-| 15 | Pipeline kanban 7 estágios | `pipeline.py show` |
-| 16 | Forecast ponderado por probabilidade × ticket | `pipeline.py forecast` |
-| 17 | Funil com taxa de conversão estágio a estágio | `pipeline.py funnel` |
-| 18 | Audit de leads abandonados (sem touch há N dias) | `pipeline.py audit` |
+Como contratar e pegar a sua chave:
 
-### Camada 4 — CONTEXTO (NOVA)
+1. Entre em [zappfy.io](https://zappfy.io) e clique em **Cadastre-se** para criar a sua conta.
+2. Dentro do painel, clique em **Planos** e escolha o plano de **1 número** (um número de WhatsApp já é suficiente).
+3. Clique em **Dashboard** e depois em **Nova Instância** ("instância" é o nome que a Zappfy dá para um número conectado).
+4. Gere o QR Code e escaneie com o WhatsApp do celular, igual você faz para entrar no WhatsApp Web: **Configurações → Dispositivos conectados → Conectar dispositivo**.
+5. Quando conectar, aparece um cartão com o seu número. Copie o código do campo **API Key** — é a chave que você vai colar no passo 4 da instalação.
 
-| # | Capacidade | Comando |
-|---|---|---|
-| 19 | Enrich CSV/Google Sheets/JSON cruzando por phone | `contexto.py enrich` |
-| 20 | Fetch HTML (página web) → contexto pro lead | `contexto.py fetch-html` |
-| 21 | Relatório executivo (single OU semanal) | `relatorio.py --log / --week` |
+> Guarde a API Key só com você: quem tem essa chave consegue usar o seu WhatsApp.
 
-## Fluxo do dia comercial — exemplo real
+### Como instalar (5 minutos)
 
-```
-> health
-🟢 API: 200 OK · latência 320ms
-🟢 Grupos visíveis: 18
-🟢 Erro 24h: 0.8%
+Os passos abaixo usam o **Terminal**. Não precisa saber programar: é só copiar o comando, colar e apertar Enter.
 
-> pull inbox && triage
-✅ pull: 12 novas · 3 duplicadas · 15 da API
-triage: 12 mensagens
-  3  promovido_sql
-  2  blacklist
-  4  saudacao_respondida
-  1  agendamento + link enviado
-  2  ignored_ruido
+1. **Baixe o agente.** Clique aqui para baixar: **[⬇️ Agent-Whatsapp.zip](https://github.com/asv-digital/agent-whatsapp/releases/download/v1.0.0/Agent-Whatsapp.zip)**
 
-> kanban
-▮ NOVO (8) ▮ MQL (12) ▮ SQL (5)  ← os 3 quentes de hoje
-▮ EM_CONVERSA (7) ▮ PROPOSTA (3) ▮ NEGOCIACAO (2)
+2. **Descompacte.** Dê dois cliques no arquivo baixado. Vai aparecer uma pasta com os arquivos do agente.
 
-> forecast --ticket 2500
-PROJEÇÃO PONDERADA  R$ 18.750
-GANHO REALIZADO     R$ 25.000  (10 fechamentos)
+3. **Abra o Terminal dentro dessa pasta.** Abra o aplicativo **Terminal**, digite `cd ` (com um espaço depois), arraste a pasta para dentro da janela e aperte Enter.
 
-> audit --days 7
-[15 leads sem toque há ≥7d, ordenados por fit]
+4. **Rode o assistente de instalação.** Copie o comando abaixo, cole no Terminal e aperte Enter:
 
-> enroll-csv leads_audit.csv em followup_padrao
-✅ 15 enrolled — 75 jobs criados
+   ```
+   python3 instalar.py
+   ```
 
-> fire followup
-✅ 12 disparados | 2 skipped (responderam) | 1 falha
-```
+   Ele faz 4 perguntas, e você responde digitando e apertando Enter:
 
-## Pré-requisitos
+   - **API Key da Zappfy** — a chave que você copiou lá em cima.
+   - **Seu número de WhatsApp**, com DDD — é para ele que o agente manda as mensagens de teste.
+   - **Link da sua agenda** (Calendly ou parecido) — o agente envia quando o cliente quer marcar horário. Se não usa, só aperte Enter.
+   - **Nome da sua empresa** — entra na resposta automática de saudação. Se preferir, só aperte Enter.
 
-- **API de WhatsApp — [Zappfy](https://zappfy.io)** com instância conectada e a **API Key** dela. É a API que a Bravy usa e recomenda; como contratar está logo abaixo.
-- **Python 3.8+** (zero dependências externas — só stdlib).
-- **Claude Code** logado (recomendado, mas opcional — todos comandos rodam via CLI puro).
-- (Opcional) Conta **Calendly** ou Cal.com pra agendamento automático.
+   Com as respostas, o assistente testa a conexão com o seu WhatsApp, puxa a lista dos seus grupos e instala o agente no Claude Code, tudo sozinho. Quando aparecer **"Pronto! O agente está instalado"**, deu certo.
 
-### Ainda não tem a API do WhatsApp?
+   - Se o computador disser que não encontrou `python3`, use `python instalar.py`.
+   - Se aparecer que a conexão não funcionou, confira se a API Key foi colada inteira e se o seu número continua conectado no painel da Zappfy. Depois rode o comando de novo.
 
-Pra ligar o WhatsApp ao Claude você precisa de uma API de WhatsApp. Este agente roda em cima da **[Zappfy](https://zappfy.io)**:
+5. **Use pelo Claude Code, conversando em português.** Feche o Claude Code e abra de novo dentro dessa pasta. A partir daí é só pedir, por exemplo: `lista grupos`.
 
-1. Cadastre-se em <https://zappfy.io> e escolha o plano pela quantidade de números (1 número = 1 instância; 1 já basta).
-2. No painel, **Dashboard → Nova Instância** e escaneie o QR Code com o seu WhatsApp.
-3. Copie a **API Key** do card da instância e cole em `ZAPPFY_TOKEN` no `.env`.
+6. **Antes de usar o follow-up automático, complete os seus textos.** As mensagens prontas de follow-up têm lacunas para você preencher com os dados do seu negócio (o assunto, o produto, o link). No Claude Code, peça: `preenche as lacunas dos meus textos de follow-up`. Ele pergunta cada informação e salva. Enquanto uma lacuna estiver vazia, o agente não envia a mensagem que depende dela.
 
-Passo a passo completo em `COMO-INSTALAR.md` (seção 1.1).
+Mais detalhes e solução de problemas em `COMO-INSTALAR.md`, dentro do zip. A lista de todos os comandos está em [REFERENCIA.md](REFERENCIA.md).
 
-## Instalação rápida
+### O que entrega
 
-Descompacte o `Agent-Whatsapp.zip`, abra o Terminal dentro da pasta e rode o assistente:
+**Disparo (enviar mensagens)**
 
-```bash
-python3 instalar.py
-```
+- Lista os grupos do seu WhatsApp e mostra em quais você é administrador
+- Extrai os contatos dos grupos para uma planilha, sem números repetidos
+- Filtra esses contatos (por DDD, por quem é administrador, por quantos grupos participa)
+- Envia a mesma mensagem para vários grupos de uma vez
+- Envia mensagem individual, uma a uma, chamando cada pessoa pelo nome
+- Agenda o envio para o dia e a hora que você escolher
+- Testa duas versões da mensagem e mostra qual teve mais resposta
 
-Ele faz 4 perguntas (API Key da Zappfy, seu número, link da agenda e nome da empresa), cria o arquivo de configuração (`.env`), testa a conexão, puxa a lista dos seus grupos e instala o agente no Claude Code. Funciona igual no Mac, Windows e Linux. Se o comando `python3` não existir no seu computador, use `python instalar.py`.
+**Inbox (respostas que chegam)**
 
-Depois, feche o Claude Code e abra de novo dentro da pasta.
-
-**Antes de usar o follow-up automático:** os textos prontos têm lacunas (`[TEMA]`, `[PRODUTO]`...). Preencha as linhas `MSG_` do `.env`. Enquanto estiverem vazias, o agente não envia as mensagens que dependem delas.
+- Lê as mensagens que chegam no seu WhatsApp
+- Classifica cada resposta em 8 tipos: pediu para sair, quer agendar, interessado, objeção, sem interesse, pergunta, saudação e ruído
+- Age sozinho conforme o tipo: tira da lista quem pediu para sair, manda o link da agenda para quem quer agendar e avisa você quando alguém demonstra interesse
 
-<details>
-<summary>Instalação manual (sem o assistente)</summary>
+**CRM (organização dos contatos)**
 
-```bash
-# 1. Configurar: copie .env.example com o nome .env e preencha ZAPPFY_TOKEN e TEST_NUMBER
-cp .env.example .env
+- Guarda o histórico de cada contato num banco de dados que fica no seu computador
+- Qualifica cada lead com 3 perguntas e dá uma nota de 0 a 100
+- Faz follow-up automático por até 30 dias, com 4 sequências prontas: follow-up padrão, recuperação de carrinho, pós-proposta e reativação
+- Organiza os contatos num funil de vendas com 7 etapas
+- Calcula a previsão de receita
+- Mostra a taxa de conversão entre as etapas do funil
+- Aponta os leads que ficaram sem contato
 
-# 2. Health-check
-python3 health_check.py
-
-# 3. Listar grupos da instância
-python3 disparo.py listar --csv-out grupos.csv
+**Contexto (personalização)**
 
-# 4. Instalar agente Claude Code
-mkdir -p .claude/agents && cp agent-whatsapp.md .claude/agents/
-# /exit + reabra Claude Code
-```
-
-</details>
-
-## Uso via Claude Code (linguagem natural)
-
-```
-> lista grupos
-> extrai leads dedup
-> dispara: estamos AO VIVO! 🔥 entra 👇 https://link.com
-> x1: oi {{first_name}}, vi a {{empresa}}, separei isso pra você
-> pull inbox && triage
-> kanban
-> forecast
-> qualifica 5511999990001 nome=Maria
-> enroll-csv leads_quentes.csv em pos_proposta
-> fire followup
-> enrich leads de https://docs.google.com/.../export?format=csv chave=phone
-> fetch contexto 5511999990001 https://empresa-do-lead.com.br
-> relatório semana
-```
-
-## Arquitetura técnica
-
-- **13 scripts Python** sem dependências externas (stdlib pura: `urllib`, `sqlite3`, `csv`, `json`, `re`, `argparse`, `http.server`).
-- **SQLite local** (`data.db`) com 7 tabelas: `leads`, `touches`, `inbox`, `conversations`, `followup_jobs`, `pipeline_events`, `campaigns`. Schema versionado.
-- **Camada de proteção**: jitter ±20%, retry 3x backoff exponencial, blacklist persistente cross-canal, dedup cross-grupo, health-check obrigatório >50 destinos, validação E.164 BR com DDDs válidos, hash SHA-256 dos números.
-- **Logs estruturados** (`timestamp|number|kind|status|err`) auditáveis pra LGPD.
-- **Claude Code agent** que mapeia linguagem natural → comando CLI exato.
-
-## Limites operacionais (decoradinho)
-
-| Métrica | Grupos | X1 (1:1) |
-|---|---|---|
-| Volume/min | 40-50 | 25-30 |
-| Volume/h | 200 | 150 |
-| Volume/dia | 1.500-3.000 | 800-1.500 |
-| Delay mín | 30s | 45s |
-| Delay padrão | 60s ±20% | 75s ±20% |
-| `mentionEveryone` | sim | n/a |
-| Personalização obrigatória | não | sim (`{{first_name}}` mín) |
-
-## Pipeline com forecast
-
-7 estágios com probabilidade (configurável em `db.py`):
-
-```
-novo          5%    →  just enrolled
-mql          10%    →  engajou (engagement_score >= 30)
-sql          25%    →  fit declarado (intent=interessado OU fit >= 70)
-em_conversa  40%    →  respondeu na última semana
-proposta     60%    →  proposta enviada
-negociacao   75%    →  discutindo termos
-ganho       100%
-perdido       0%
-```
-
-`forecast = Σ (leads_no_estagio × probabilidade × ticket_medio)`
-
-## Cadências built-in
-
-```
-followup_padrao        D+0, D+1, D+3, D+7, D+14   (5 toques)
-recuperacao_carrinho   D+0, D+1, D+3              (3 toques, urgência)
-pos_proposta           D+1, D+3, D+7, D+14, D+30  (5 toques + break-up)
-reativacao             D+0, D+7, D+30             (3 toques, base fria)
-```
-
-Custom: criar `cadencias/<nome>.csv` com colunas `offset_days,text` (suporta `\n` literal). Operador roda `enroll --cadencia <nome>`.
-
-## Intent classifier — 8 categorias
-
-```
-opt_out         → auto-blacklist + responde "ok, parei" + status=perdido
-agendamento     → envia CALENDLY_URL + state=aguardando_reuniao
-interessado     → status=sql + tag 'quente' + alerta humano 🔥
-objecao_preco   → status=em_conversa + tag 'objecao_preco' + alerta 💰
-sem_interesse   → status=perdido + tag 'frio'
-pergunta        → state=em_conversa + alerta humano ❓
-saudacao        → responde com {{first_name}}
-ruido           → ignora (kk, ok, emoji só)
-```
-
-Sem ML, sem dependência externa — regex + heurística. Self-test: `python3 intent.py`.
-
-## Segurança e LGPD
-
-- **Token nunca no código.** Sempre `.env`. Auditoria automática em scripts.
-- **Lista comprada/raspada = recusa** do agente.
-- **Hash SHA-256** dos números nos CSVs auditáveis.
-- **Opt-out automático** via `opt_out` intent + blacklist persistente cross-canal.
-- **Logs estruturados** servem como evidência LGPD em caso de denúncia.
-- **`.env`, `data.db`, `grupos.csv`, `contatos.csv`, `blacklist.txt`, `logs/`** todos no `.gitignore`.
-
-## Estrutura de arquivos
-
-```
-Agent-Whatsapp/
-├── agent-whatsapp.md            # agente Claude Code (21 capacidades)
-├── instalar.py                  # assistente de instalação (cria o .env, testa e instala o agente)
-├── disparo.py                   # core: listar/preview/teste/broadcast/x1/retry/agendar
-├── extrair_leads.py             # exporta + importa + dedup + E.164 + SHA-256
-├── segmentar_leads.py           # filtro por DDD/grupos/admin/blacklist/nome
-├── ab_test.py                   # split 50/50 + z-test 95%
-├── relatorio.py                 # relatório executivo .md
-├── health_check.py              # 4 sinais 🟢🟡🔴
-├── db.py                        # camada SQLite (7 tabelas + helpers)
-├── intent.py                    # classificador 8 intents
-├── inbox.py                     # pull/watch/webhook + triage automático
-├── qualificar.py                # BANT/SPIN 3Q + scoring 0-100
-├── followup.py                  # cadência multi-toque D+0..D+30
-├── pipeline.py                  # kanban + forecast + funnel + audit + promote
-├── contexto.py                  # enrich CSV/Sheets/JSON + fetch-html
-├── blacklist.txt                # opt-out cross-canal
-├── grupos.csv.example           # template grupos
-├── contatos.csv.example         # template contatos x1
-├── .env.example                 # template variáveis
-├── .gitignore                   # protege credenciais e dados sensíveis
-├── README.md, COMO-INSTALAR.md, PLAYBOOK-CAMPANHAS.md
-└── (runtime: data.db, logs/, scheduled/, campaigns/, cadencias/)
-```
-
-## Comparação com soluções de mercado
-
-| Recurso | Disparador caseiro | RD Station / HubSpot | **Agent-Whatsapp** |
-|---|:-:|:-:|:-:|
-| Disparo grupo + x1 | ✅ | ⚠️ pago | ✅ |
-| Personalização placeholder | ❌ | ✅ | ✅ |
-| Inbox + classificação | ❌ | ⚠️ pago | ✅ |
-| Auto-blacklist por intent | ❌ | ❌ | ✅ |
-| Cadência multi-toque | ❌ | ✅ | ✅ |
-| Pipeline com forecast | ❌ | ✅ | ✅ |
-| Qualificação BANT via WhatsApp | ❌ | ❌ | ✅ |
-| Enrich externo (Sheets/JSON) | ❌ | ⚠️ enterprise | ✅ |
-| Fetch HTML pra contextualizar | ❌ | ❌ | ✅ |
-| Linguagem natural via Claude Code | ❌ | ❌ | ✅ |
-| Custo mensal | R$ 0 | R$ 800-2.500 | R$ 0 |
-| Self-host / dados próprios | ✅ | ❌ | ✅ |
-
-## Suporte
-
-- WhatsApp: [+55 21 97532-8361](https://wa.me/5521975328361)
-- Pacote completo Bravy / ASV Digital — 56+ agentes operacionais.
-
-## Licença
-
-Uso permitido pra clientes ASV Digital / Bravy. Não redistribuir.
+- Cruza seus contatos com planilhas (CSV ou Google Sheets) para personalizar as mensagens com os dados de cada pessoa
+- Lê uma página da internet para usar o conteúdo dela na mensagem
+- Gera um relatório de cada disparo
+
+### Suporte
+
+WhatsApp: [+55 21 97532-8361](https://wa.me/5521975328361)
+
+### Licença
+
+Uso permitido para clientes ASV Digital / Bravy. Não redistribuir.
